@@ -1,1 +1,1 @@
-wasm-pack build --release --target nodejs . --features debug
+wasm-pack build --release --target nodejs . --features dev

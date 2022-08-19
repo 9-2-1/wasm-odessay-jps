@@ -385,7 +385,6 @@ pub fn a_star_jps(
     end_x: isize,
     end_y: isize,
     _simplify: bool,
-    _debug: bool,
 ) -> Vec<isize> {
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
@@ -397,11 +396,9 @@ pub fn a_star_jps(
     }*/
 
     #[cfg(feature = "debug")]
-    if _debug {
-        console_log(pathfinder.debug().as_str());
-        console_log(pathfinder.debug_path(&path).as_str());
-        console_log(format!("{:?}\n", path).as_str());
-    }
+    console_log(pathfinder.debug().as_str());
+    console_log(pathfinder.debug_path(&path).as_str());
+    console_log(format!("{:?}\n", path).as_str());
 
     let mut resu = Vec::new();
     path.iter().for_each(|point| {
