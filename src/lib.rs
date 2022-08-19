@@ -285,12 +285,12 @@ impl<'a> AStarJPS<'a> {
 
         if self.distance[self.index(begin)] != isize::MAX {
             let mut find = begin;
-            path.push(find);
             let mut cdir = 0;
             while end != find {
                 let dir = self.direction[self.index(find)];
                 if dir != 0 {
                     cdir = dir;
+                    path.push(find);
                 }
                 find = find - dir!(cdir);
                 if !self.can_walk(find) {
@@ -302,8 +302,8 @@ impl<'a> AStarJPS<'a> {
 
                     break;
                 }
-                path.push(find);
             }
+            path.push(find);
         }
 
         return path;
