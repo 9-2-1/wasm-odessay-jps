@@ -1,0 +1,2 @@
+#!/usr/bin/bash
+. $PREFIX/etc/profile.d/rust-nightly.sh
