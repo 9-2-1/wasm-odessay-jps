@@ -63,6 +63,8 @@ function mapDraw() {
 		}
 	}
 	ct.fillStyle = "#d0d000";
+	ct.strokeStyle = "#0000d0";
+	ct.lineWidth = 3;
 	for (let i = 0; i < path.length; i += 2) {
 		ct.fillRect(30 * path[i], 30 * path[i + 1], 30, 30);
 	}
@@ -70,6 +72,12 @@ function mapDraw() {
 	ct.fillRect(30 * stX, 30 * stY, 30, 30);
 	ct.fillStyle = "#00d000";
 	ct.fillRect(30 * edX, 30 * edY, 30, 30);
+	for (let i = 0; i < path.length - 2; i += 2) {
+		ct.beginPath();
+		ct.moveTo(30 * path[i] + 15, 30 * path[i + 1] + 15);
+		ct.lineTo(30 * path[i + 2] + 15, 30 * path[i + 3] + 15);
+		ct.stroke();
+	}
 }
 
 map_draw.addEventListener("touchstart", mapChangeStart);
@@ -135,6 +143,6 @@ function mapChangeStop(event) {
 
 function mapCalc() {
 	let mode = map_cross.checked ? 2 : 1;
-	let path = wasm_bindgen.a_star_jps(new Int8Array(memory), mapX, mapY, stX, stY, edX, edY, false, false);
+	let path = wasm_bindgen.a_star_jps(new Int8Array(memory), mapX, mapY, stX, stY, edX, edY, false);
 	return Array.from(path);
 }
