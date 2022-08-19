@@ -1,3 +1,4 @@
+use std::cmp;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::fmt;
@@ -121,6 +122,31 @@ macro_rules! dir_i8 {
     }};
 }
 
+fn roundidiv(a: isize, b: isize) -> isize {
+    return if a > 0 {
+        (2 * a + b) / (2 * b) // round(a/b) = floor(a/b+1/2) = (2*a+b)/(2*b)
+    } else {
+        (2 * a - b + 1) / (2 * b) // round(a/b) = ceil'(a/b-1/2) = (2*a-b+1)/(2*b)
+    };
+}
+
+fn line_points(a: Pos, b: Pos) -> Vec<Pos> {
+    let mut resu = Vec::new();
+    let step = cmp::max((a.x - b.x).abs(), (a.y - b.y).abs());
+    for i in 0..step {
+        resu.push(pos![
+            a.x + roundidiv((b.x - a.x) * i, step),
+            a.y + roundidiv((b.y - a.y) * i, step)
+        ]);
+    }
+    resu.push(b);
+
+    //#[cfg(feature = "debug")]
+    //console_log(format!("{:?} {:?} {:?}", a, b, resu).as_str());
+
+    return resu;
+}
+
 impl<'a> AStarJPS<'a> {
     fn new(size: Pos, map: &'a [u8]) -> Self {
         let siz = (size.x * size.y) as usize;
@@ -136,9 +162,9 @@ impl<'a> AStarJPS<'a> {
     fn hfunc(a: Pos, b: Pos) -> isize {
         let diff = a - b;
         return if diff.x.abs() < diff.y.abs() {
-            diff.x + 2 * diff.y
+            diff.x.abs() + 2 * diff.y.abs()
         } else {
-            2 * diff.x + diff.y
+            2 * diff.x.abs() + diff.y.abs()
         };
     }
 
@@ -265,6 +291,9 @@ impl<'a> AStarJPS<'a> {
 
         self.point_add(end, begin, 0, pos!(0, 0));
         while let Some(pinfo) = self.openlist.pop() {
+            #[cfg(feature = "debug")]
+            console_log(format!("{:?} ", self.openlist).as_str());
+
             if pinfo.distance == self.distance[self.index(pinfo.position)] {
                 if pinfo.position == begin {
                     break;
@@ -278,7 +307,10 @@ impl<'a> AStarJPS<'a> {
                     self.diagmove(&pinfo, dir, begin);
                 }
             }
-            //console_log(self.debug().as_str());
+
+            #[cfg(feature = "debug")]
+            console_log(self.debug().as_str());
+
         }
 
         //console_log(self.debug().as_str());
@@ -350,10 +382,13 @@ impl<'a> AStarJPS<'a> {
             // 这里要先判path是否为空，
             // 否则path.len() - 1作为无符号整数usize会向下溢出
             for i in 0..(path.len() - 1) {
-                let index = self.index(path[i]);
-                let dir = path[i] - path[i + 1];
-                let dir = dir_i8!(dir);
-                map[index] = dir;
+                let lpath = line_points(path[i], path[i + 1]);
+                for i in 0..(lpath.len() - 1) {
+                    let index = self.index(lpath[i]);
+                    let dir = lpath[i] - lpath[i + 1];
+                    let dir = dir_i8!(dir);
+                    map[index] = dir;
+                }
             }
             let index = self.index(path[path.len() - 1]);
             map[index] = dir_i8!(pos!(0, 0));
