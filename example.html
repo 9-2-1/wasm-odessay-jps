@@ -14,9 +14,157 @@
 		宽<input type="number" id="map-mapX" value="10" />
 		高<input type="number" id="map-mapY" value="10" />
 		<input type="checkbox" id="map-smooth" />简化
+		<input type="range" min=0.2 max=2.0 value=1.0 step=0.1 style="width: 100%;" id="playbackrate" />简化
 	</center>
-	<script src="pkg\wasm_odessay_jps.js"></script>
-	<script src="example.js"></script>
+	<!--<script src="pkg\wasm_odessay_jps.js"></script>
+	<script src="example.js"></script>-->
+	<script>
+		window.addEventListener('error', function(a) {
+			alert(a.message);
+		});
+		window.addEventListener('unhandledrejection', function(a) {
+			alert(a.reason.message);
+		});
+
+	</script>
+	<script>
+		let source;
+
+		function dump(f) {
+			return 'data:text/javascript;base64,' + btoa('(' + f.toString().replace(/[^\x01-\xfe]/g, "?") + ')()');
+		}
+
+
+		function xyz() { // white-noise-processor.js
+			// https://zhuanlan.zhihu.com/p/347091298
+
+			function cadd(a, b) {
+				return [a[0] + b[0], a[1] + b[1]];
+			}
+
+			function csub(a, b) {
+				return [a[0] - b[0], a[1] - b[1]];
+			}
+
+			function cmul(a, b) {
+				return [a[0] * b[0] - a[1] * b[1], a[1] * b[0] + a[0] * b[1]];
+			}
+
+			function cinv(a) {
+				return [a[0], -a[1]];
+			}
+
+			function FFT(a, n, inv) //inv为虚部符号，inv为1时FFT，inv为-1时IFFT
+			{
+				if (n == 1) //如果需要转换的只有一项就直接返回
+					return;
+				let mid = n / 2;
+				let A1 = [],
+					A2 = [];
+				for (let i = 0; i < n; i += 2) //拆分多项式
+				{
+					A1.push(a[i]);
+					A2.push(a[i + 1]);
+				}
+				FFT(A1, mid, inv); //递归分治
+				FFT(A2, mid, inv);
+				let w0 = [1, 0],
+					wn = [Math.cos(2 * Math.PI / n), inv * Math.sin(2 * Math.PI / n)]; //单位根
+				for (let i = 0; i < mid; ++i, w0 = cmul(w0, wn)) //合并多项式
+				{
+					a[i] = cadd(A1[i], cmul(w0, A2[i]));
+					a[i + n / 2] = csub(A1[i], cmul(w0, A2[i]));
+				}
+			}
+
+			function pitch(inp, K) {
+				let a = [],
+					b = [];
+				// Don't use map()
+				inp.forEach(x => a.push([x, 0]));
+				FFT(a, a.length, 1);
+				for (let i = 0; i < a.length; i++) {
+					b.push(cmul(a[Math.round(i / K)], [2 * (0.5 - (Math.abs(i / K - Math.round(i / K)))), 0]));
+				}
+				a = b;
+				FFT(a, a.length, -1);
+				return a.map(x => x[0] / a.length);
+			}
+
+			// ----7-2-5---5-----6-4---2-----------7--2-5---5-----6--4-1-2-----------2-4-5-----5-4---4---2-7---6-5---4-3-2-------1-----7-7-------
+
+			// 7---2---2---1---7-----
+
+			let buff = new Float64Array(512).fill(0.0);
+			let ptr = 0;
+			class WhiteNoiseProcessor extends AudioWorkletProcessor {
+				process(inputs, outputs, parameters) {
+					const input = inputs[0]
+					const output = outputs[0]
+					for (let channel = 0; channel < output.length; ++channel) {
+						for (let i = 0; i < input[channel].length; ++i) {
+							output[channel][i] = buff[i + ptr];
+							buff[i + ptr] = input[channel][i];
+						}
+						ptr += input[channel].length;
+						if (ptr >= 512) {
+							buff = pitch(buff, 1.5);
+							ptr = 0;
+						}
+
+						//this.port.postMessage(ptr);
+					}
+					return true
+				}
+			}
+
+			registerProcessor('white-noise-processor', WhiteNoiseProcessor);
+			//return pitch(arguments[0], arguments[1]);
+		}
+
+		/*a=	xyz([1,2,3,4,3,2,1,2], 1);
+			 out = "\n" + a.map(x=> "\n" + x.toFixed(2));
+			 document.body.innerText = out;
+			 throw new Error("ok");*/
+
+		document.getElementById("map-smooth").addEventListener("click", async function() {
+			const audioCtx = new(window.AudioContext || window.webkitAudioContext)();
+
+			const data = await (await fetch("example.ogg")).arrayBuffer();
+			const myArrayBuffer = await audioCtx.decodeAudioData(data);
+			// Get an AudioBufferSourceNode.
+			// This is the AudioNode to use when we want to play an AudioBuffer
+			source = audioCtx.createBufferSource();
+			// set the buffer in the AudioBufferSourceNode
+			source.buffer = myArrayBuffer;
+			// connect the AudioBufferSourceNode to the
+			// destination so we can hear the sound
+
+			await audioCtx.audioWorklet.addModule(dump(xyz));
+			const whiteNoiseNode = new AudioWorkletNode(audioCtx, 'white-noise-processor')
+
+			whiteNoiseNode.port.onmessage = function(mess) {
+				spark.innerText = mess.data;
+			};
+
+			whiteNoiseNode.addEventListener("processorerror", function(a) {
+				alert("error");
+			});
+
+			source.connect(whiteNoiseNode);
+			whiteNoiseNode.connect(audioCtx.destination);
+			// start the source playing
+			source.start();
+
+		});
+
+		document.getElementById("playbackrate").addEventListener("change", function() {
+			source.playbackRate.value = event.target.value;
+		});
+
+	</script>
+	<br />
+	<pre id=spark></pre>
 </body>
 
 </html>
