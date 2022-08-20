@@ -310,7 +310,6 @@ impl<'a> AStarJPS<'a> {
 
             #[cfg(feature = "debug")]
             console_log(self.debug().as_str());
-
         }
 
         //console_log(self.debug().as_str());
@@ -339,6 +338,12 @@ impl<'a> AStarJPS<'a> {
         }
 
         return path;
+    }
+
+    fn simplify(&self, path: &Vec<Pos>) -> Vec<Pos> {
+        let mut simpath = Vec::new();
+        simpath.push(pos!(0, 0));
+        return simpath;
     }
 
     #[cfg(feature = "debug")]
@@ -419,26 +424,36 @@ pub fn a_star_jps(
     begin_y: isize,
     end_x: isize,
     end_y: isize,
-    _simplify: bool,
 ) -> Vec<isize> {
     #[cfg(feature = "console_error_panic_hook")]
     console_error_panic_hook::set_once();
 
     let mut pathfinder = AStarJPS::new(pos!(map_x, map_y), map);
     let path = pathfinder.find(pos!(begin_x, begin_y), pos!(end_x, end_y));
-    /*if simplify {
-        path = pathfinder.simplify(path);
-    }*/
+    let smoothpath = pathfinder.simplify(&path);
 
     #[cfg(feature = "debug")]
-    console_log(pathfinder.debug().as_str());
-    console_log(pathfinder.debug_path(&path).as_str());
-    console_log(format!("{:?}\n", path).as_str());
+    {
+        console_log(pathfinder.debug().as_str());
+        console_log(pathfinder.debug_path(&path).as_str());
+        console_log(format!("{:?}\n", path).as_str());
+        console_log(pathfinder.debug_path(&smoothpath).as_str());
+        console_log(format!("{:?}\n", smoothpath).as_str());
+    }
 
-    let mut resu = Vec::new();
+    let mut resu = Vec::with_capacity((path.len() + smoothpath.len()) * 2 + 1);
+
+    resu.push(path.len() as isize);
+
     path.iter().for_each(|point| {
         resu.push(point.x);
         resu.push(point.y);
     });
+
+    smoothpath.iter().for_each(|point| {
+        resu.push(point.x);
+        resu.push(point.y);
+    });
+
     return resu;
 }

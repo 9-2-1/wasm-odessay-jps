@@ -1,7 +1,7 @@
 let map_draw = document.getElementById("map-draw");
 let map_mapX = document.getElementById("map-mapX");
 let map_mapY = document.getElementById("map-mapY");
-let map_cross = document.getElementById("map-cross");
+let map_smooth = document.getElementById("map-smooth");
 
 let memory = [];
 
@@ -32,7 +32,7 @@ loadwasm().then(function() {
 	mapScale();
 	map_mapX.addEventListener("change", mapScale);
 	map_mapY.addEventListener("change", mapScale);
-	map_cross.addEventListener("change", function(event) {
+	map_smooth.addEventListener("change", function(event) {
 		path = mapCalc();
 		mapDraw();
 	});
@@ -142,7 +142,10 @@ function mapChangeStop(event) {
 }
 
 function mapCalc() {
-	let mode = map_cross.checked ? 2 : 1;
-	let path = wasm_bindgen.a_star_jps(new Int8Array(memory), mapX, mapY, stX, stY, edX, edY, false);
-	return Array.from(path);
+	let mode = map_smooth.checked;
+	let resu = wasm_bindgen.a_star_jps(new Int8Array(memory), mapX, mapY, stX, stY, edX, edY);
+	let sp = resu[0];
+	let path = resu.slice(1, sp * 2 + 1);
+	let smoothpath = resu.slice(sp * 2 + 1);
+	return Array.from(mode ? smoothpath : path);
 }
