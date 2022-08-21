@@ -14,10 +14,13 @@
 		宽<input type="number" id="map-mapX" value="10" />
 		高<input type="number" id="map-mapY" value="10" />
 		<input type="checkbox" id="map-smooth" />简化
-		<input type="range" min=0.2 max=2.0 value=1.0 step=0.1 style="width: 100%;" id="playbackrate" />简化
+		<input type="range" min=-2.0 max=2.0 value=0.0 step=0.001 style="width: 100%;" id="playbackrate" />简化
 	</center>
 	<!--<script src="pkg\wasm_odessay_jps.js"></script>
 	<script src="example.js"></script>-->
+	<br />
+	<pre id=spark></pre>
+	<canvas width=600 height=100 style=width:100% id=view />
 	<script>
 		window.addEventListener('error', function(a) {
 			alert(a.message);
@@ -50,10 +53,6 @@
 				return [a[0] * b[0] - a[1] * b[1], a[1] * b[0] + a[0] * b[1]];
 			}
 
-			function cinv(a) {
-				return [a[0], -a[1]];
-			}
-
 			function FFT(a, n, inv) //inv为虚部符号，inv为1时FFT，inv为-1时IFFT
 			{
 				if (n == 1) //如果需要转换的只有一项就直接返回
@@ -77,15 +76,61 @@
 				}
 			}
 
-			function pitch(inp, K) {
+			function pitch(inp, K, that) {
 				let a = [],
 					b = [];
 				// Don't use map()
 				inp.forEach(x => a.push([x, 0]));
 				FFT(a, a.length, 1);
-				for (let i = 0; i < a.length; i++) {
-					b.push(cmul(a[Math.round(i / K)], [2 * (0.5 - (Math.abs(i / K - Math.round(i / K)))), 0]));
+				const U = Math.floor,
+					V = x => U(x) + 1,
+					I = Math.abs,
+					S = Math.sqrt;
+				if (K >= 1) {
+					for (let i = 0; i < a.length / 2; i++) {
+						let p = i / K;
+						b.push(
+							cadd(
+								cmul(a[U(p)], [(1 - I(p - U(p))), 0]),
+								cmul(a[V(p)], [(1 - I(p - V(p))), 0])
+							)
+						);
+					}
+					for (let i = a.length / 2; i < a.length; i++) {
+						let p = a.length - (a.length - i) / K;
+						b.push(
+							cadd(
+								cmul(a[U(p)], [(1 - I(p - U(p))), 0]),
+								cmul(a[V(p) % a.length], [(1 - I(p - V(p))), 0])
+							)
+						);
+					}
+				} else {
+					b = Array(a.length).fill([0.0, 0.0]);
+					for (let i = 0; i < a.length / 2; i++) {
+						let p = i * K;
+						b[U(p)] = cadd(
+							b[U(p)],
+							cmul(a[i], [(1 - I(p - U(p))), 0])
+						);
+						b[V(p)] = cadd(
+							b[V(p)],
+							cmul(a[i], [(1 - I(p - V(p))), 0])
+						);
+					}
+					for (let i = a.length / 2; i < a.length; i++) {
+						let p = a.length - (a.length - i) * K;
+						b[U(p)] = cadd(
+							b[U(p)],
+							cmul(a[i], [(1 - I(p - U(p))), 0])
+						);
+						b[V(p) % a.length] = cadd(
+							b[V(p) % a.length],
+							cmul(a[i], [(1 - I(p - V(p))), 0])
+						);
+					}
 				}
+				that.port.postMessage([a, b]);
 				a = b;
 				FFT(a, a.length, -1);
 				return a.map(x => x[0] / a.length);
@@ -95,26 +140,43 @@
 
 			// 7---2---2---1---7-----
 
-			let buff = new Float64Array(512).fill(0.0);
-			let ptr = 0;
 			class WhiteNoiseProcessor extends AudioWorkletProcessor {
+				constructor() {
+					super();
+					let that = this;
+					this.port.onmessage = function(mess) {
+						that.diaozi = mess.data;
+					};
+					this.buff = new Float64Array(1024).fill(0.0);
+					this.ptr = 0;
+					this.diaozi = 0.0;
+				}
 				process(inputs, outputs, parameters) {
-					const input = inputs[0]
-					const output = outputs[0]
-					for (let channel = 0; channel < output.length; ++channel) {
-						for (let i = 0; i < input[channel].length; ++i) {
-							output[channel][i] = buff[i + ptr];
-							buff[i + ptr] = input[channel][i];
+					try {
+						const input = inputs[0]
+						const output = outputs[0]
+						if (input.length === 0) {
+							throw new Error("playback stopped");
 						}
-						ptr += input[channel].length;
-						if (ptr >= 512) {
-							buff = pitch(buff, 1.5);
-							ptr = 0;
+						for (let i = 0; i < input[0].length; ++i) {
+							output[0][i] = this.buff[i + this.ptr];
+							this.buff[i + this.ptr] = input[0][i];
 						}
-
-						//this.port.postMessage(ptr);
+						this.ptr += input[0].length;
+						if (this.ptr >= 1024) {
+							this.buff = pitch(this.buff, Math.pow(2, this.diaozi), this);
+							this.ptr = 0;
+						}
+						for (let channel = 1; channel < output.length; ++channel) {
+							for (let i = 0; i < input[channel].length; ++i) {
+								output[channel][i] = output[0][i];
+							}
+						}
+						return true;
+					} catch (e) {
+						this.port.postMessage(e.message);
+						return true;
 					}
-					return true
 				}
 			}
 
@@ -127,10 +189,12 @@
 			 document.body.innerText = out;
 			 throw new Error("ok");*/
 
+		let whiteNoiseNode;
+
 		document.getElementById("map-smooth").addEventListener("click", async function() {
 			const audioCtx = new(window.AudioContext || window.webkitAudioContext)();
 
-			const data = await (await fetch("example.ogg")).arrayBuffer();
+			const data = await (await fetch("test.wav")).arrayBuffer();
 			const myArrayBuffer = await audioCtx.decodeAudioData(data);
 			// Get an AudioBufferSourceNode.
 			// This is the AudioNode to use when we want to play an AudioBuffer
@@ -141,30 +205,89 @@
 			// destination so we can hear the sound
 
 			await audioCtx.audioWorklet.addModule(dump(xyz));
-			const whiteNoiseNode = new AudioWorkletNode(audioCtx, 'white-noise-processor')
+			whiteNoiseNode = new AudioWorkletNode(audioCtx, 'white-noise-processor')
 
 			whiteNoiseNode.port.onmessage = function(mess) {
-				spark.innerText = mess.data;
+				if (typeof mess.data === "object") {
+					graph(mess.data);
+				} else {
+					spark.innerText = mess.data;
+				}
 			};
 
 			whiteNoiseNode.addEventListener("processorerror", function(a) {
 				alert("error");
 			});
 
-			source.connect(whiteNoiseNode);
-			whiteNoiseNode.connect(audioCtx.destination);
+			source.connect(whiteNoiseNode).connect(audioCtx.destination);
+			source.playbackRate.value = Math.pow(2, playbackrate.value);
 			// start the source playing
 			source.start();
+			let endcall = () => {
+				source.disconnect();
+				source = audioCtx.createBufferSource();
+				// set the buffer in the AudioBufferSourceNode
+				source.buffer = myArrayBuffer;
+				source.connect(whiteNoiseNode).connect(audioCtx.destination);
+				source.playbackRate.value = Math.pow(2, playbackrate.value);
+				source.onended = endcall;
+				source.start();
+			}
+			source.onended = endcall;
 
 		});
 
-		document.getElementById("playbackrate").addEventListener("change", function() {
-			source.playbackRate.value = event.target.value;
+		let gview = document.getElementById("view").getContext("2d");
+
+		function graph(data) {
+			gview.clearRect(0, 0, 600, 100);
+			data.forEach((arr, i) => {
+				gview.beginPath();
+				gview.moveTo(0, 100);
+				let color = ["red", "blue"];
+				for (let i = 1; i < arr.length / 2; i++) {
+					let p0 = arr[i],
+						p1 = arr[arr.length - i];
+					let freq = 48000 * i / arr.length;
+					let cdis = c => Math.sqrt(c[0] * c[0] + c[1] * c[1]);
+					let power = (cdis(p0) + cdis(p1)) / arr.length;
+					gview.lineTo(300 + 300 * Math.log(freq / 256) / Math.log(16),
+						100 - 100 * power);
+				}
+				gview.moveTo(600, 100);
+				gview.closePath();
+				gview.strokeStyle = color[i];
+				//gview.fillStyle = "#00FF00";
+				gview.lineWidth = 1;
+				gview.stroke();
+				//gview.fill();
+			});
+
+			/*
+			gview.beginPath();
+			gview.moveTo(0, 100);
+			for (let i = 1; i < arr.length / 2; i++) {
+				let p0 = arr[i],
+					p1 = arr[arr.length - i];
+				let freq = 48000 * i / arr.length;
+				let cdis = c => Math.sqrt( /*c[0] * c[0] + c[1] * c[1]);
+				let power = (cdis(p0) + cdis(p1)) / arr.length;
+				gview.lineTo(300 + 300 * Math.log(freq / 256) / Math.log(16),
+					100 - 100 * power);
+			}
+			gview.moveTo(600, 100);
+			gview.closePath();
+			gview.strokeStyle = "#0000FF";
+			gview.lineWidth = 1;
+			gview.stroke();*/
+		}
+
+		document.getElementById("playbackrate").addEventListener("input", function() {
+			whiteNoiseNode.port.postMessage(-event.target.value);
+			source.playbackRate.value = Math.pow(2, event.target.value);
 		});
 
 	</script>
-	<br />
-	<pre id=spark></pre>
 </body>
 
 </html>
