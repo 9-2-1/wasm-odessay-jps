@@ -20,11 +20,11 @@
 	<script src="example.js"></script>-->
 	<br />
 	<pre id=spark></pre>
-	<canvas width=600 height=100 style=width:100% id=view />
+	<canvas width=600 height=200 style=width:100% id=view />
 	<script>
-		window.addEventListener('error', function(a) {
-			alert(a.message);
-		});
+		window.onerror = function(a, b, c, d, e) {
+			alert([b, c, d, e].join('\n'));
+		};
 		window.addEventListener('unhandledrejection', function(a) {
 			alert(a.reason.message);
 		});
@@ -39,101 +39,125 @@
 
 
 		function xyz() { // white-noise-processor.js
-			// https://zhuanlan.zhihu.com/p/347091298
+			// https://zhuanlan.zhihu.com/p/347514286
+			const CLIP = 2;
+			const BUFSIZE = 4096;
+			const pi = Math.PI;
+			let rev = new Uint32Array(BUFSIZE); //rev[i]为i的二进制翻转
 
-			function cadd(a, b) {
-				return [a[0] + b[0], a[1] + b[1]];
-			}
-
-			function csub(a, b) {
-				return [a[0] - b[0], a[1] - b[1]];
-			}
-
-			function cmul(a, b) {
-				return [a[0] * b[0] - a[1] * b[1], a[1] * b[0] + a[0] * b[1]];
-			}
-
-			function FFT(a, n, inv) //inv为虚部符号，inv为1时FFT，inv为-1时IFFT
+			function FFT(real, imag, n, inv) //inv为虚部符号，inv为1时FFT，inv为-1时IFFT
 			{
-				if (n == 1) //如果需要转换的只有一项就直接返回
-					return;
-				let mid = n / 2;
-				let A1 = [],
-					A2 = [];
-				for (let i = 0; i < n; i += 2) //拆分多项式
-				{
-					A1.push(a[i]);
-					A2.push(a[i + 1]);
+				for (let i = 0; i < n; ++i) { //先将real,imag变成最后的样子
+					if (i < rev[i]) {
+						[real[i], real[rev[i]]] = [real[rev[i]], real[i]];
+						[imag[i], imag[rev[i]]] = [imag[rev[i]], imag[i]];
+					}
+					// spark.innerText += [real[i], imag[i]] + "\n";
 				}
-				FFT(A1, mid, inv); //递归分治
-				FFT(A2, mid, inv);
-				let w0 = [1, 0],
-					wn = [Math.cos(2 * Math.PI / n), inv * Math.sin(2 * Math.PI / n)]; //单位根
-				for (let i = 0; i < mid; ++i, w0 = cmul(w0, wn)) //合并多项式
-				{
-					a[i] = cadd(A1[i], cmul(w0, A2[i]));
-					a[i + n / 2] = csub(A1[i], cmul(w0, A2[i]));
+				for (let i = 1; i < n; i <<= 1) { //合并区间的长度的二分之一，或者是合并区间的中点
+					let wn_real = Math.cos(pi / i),
+						wn_imag = inv * Math.sin(pi / i); //原根
+					for (let j = 0; j < n; j += (i << 1)) //枚举具体区间，j也就是区间右端点
+					{
+						let w0_real = 1,
+							w0_imag = 0;
+						for (let k = 0; k < i; ++k) { //合并
+							let x_real = real[j + k],
+								x_imag = imag[j + k];
+							let y_real = real[i + j + k],
+								y_imag = imag[i + j + k];
+							[y_real, y_imag] = [
+								y_real * w0_real - y_imag * w0_imag,
+								y_real * w0_imag + y_imag * w0_real
+							];
+							real[j + k] = x_real + y_real;
+							imag[j + k] = x_imag + y_imag;
+							real[i + j + k] = x_real - y_real;
+							imag[i + j + k] = x_imag - y_imag;
+							// spark.innerText += [i,j  ,k, y_real, y_imag] + "\n";
+
+							[w0_real, w0_imag] = [
+								w0_real * wn_real - w0_imag * wn_imag,
+								w0_real * wn_imag + w0_imag * wn_real
+							];
+						}
+					}
 				}
 			}
+
+			// https://zhuanlan.zhihu.com/p/197450738
+			let limit = 1;
+			let bit = BUFSIZE >> 1;
+
+			// 比特反转排列(bit-reversed order) 算法
+			while (limit < BUFSIZE) {
+				for (let i = 0; i < limit; i++) {
+					rev[i + limit] = rev[i] + bit;
+				}
+
+				limit = limit << 1;
+				bit = bit >> 1;
+			}
+
+			let real1 = new Float32Array(BUFSIZE),
+				imag1 = new Float32Array(BUFSIZE);
+			let real2 = new Float32Array(BUFSIZE),
+				imag2 = new Float32Array(BUFSIZE);
 
 			function pitch(inp, K, that) {
-				let a = [],
-					b = [];
-				// Don't use map()
-				inp.forEach(x => a.push([x, 0]));
-				FFT(a, a.length, 1);
+				real1.set(inp, 0);
+				imag1.fill(0.0);
+				real2.fill(0.0);
+				imag2.fill(0.0);
+				FFT(real1, imag1, BUFSIZE, 1);
 				const U = Math.floor,
-					V = x => U(x) + 1,
-					I = Math.abs,
-					S = Math.sqrt;
+					V = x => U(x) + 1;
 				if (K >= 1) {
-					for (let i = 0; i < a.length / 2; i++) {
+					for (let i = 0; i < BUFSIZE / 2; i++) {
 						let p = i / K;
-						b.push(
-							cadd(
-								cmul(a[U(p)], [(1 - I(p - U(p))), 0]),
-								cmul(a[V(p)], [(1 - I(p - V(p))), 0])
-							)
-						);
+						if (p > CLIP) {
+							real2[i] = real1[U(p)] * (V(p) - p) + real1[V(p)] * (p - U(p));
+							imag2[i] = imag1[U(p)] * (V(p) - p) + imag1[V(p)] * (p - U(p));
+						}
 					}
-					for (let i = a.length / 2; i < a.length; i++) {
-						let p = a.length - (a.length - i) / K;
-						b.push(
-							cadd(
-								cmul(a[U(p)], [(1 - I(p - U(p))), 0]),
-								cmul(a[V(p) % a.length], [(1 - I(p - V(p))), 0])
-							)
-						);
+					for (let i = BUFSIZE / 2; i < BUFSIZE; i++) {
+						let p = BUFSIZE - (BUFSIZE - i) / K;
+						if (p < BUFSIZE - CLIP) {
+							real2[i] = real1[U(p)] * (V(p) - p) + real1[V(p) % BUFSIZE] * (p - U(p));
+							imag2[i] = imag1[U(p)] * (V(p) - p) + imag1[V(p) % BUFSIZE] * (p - U(p));
+						}
 					}
 				} else {
-					b = Array(a.length).fill([0.0, 0.0]);
-					for (let i = 0; i < a.length / 2; i++) {
+					real2.fill(0.0);
+					imag2.fill(0.0);
+					for (let i = 0; i < BUFSIZE / 2; i++) {
 						let p = i * K;
-						b[U(p)] = cadd(
-							b[U(p)],
-							cmul(a[i], [(1 - I(p - U(p))), 0])
-						);
-						b[V(p)] = cadd(
-							b[V(p)],
-							cmul(a[i], [(1 - I(p - V(p))), 0])
-						);
+						if (i > CLIP) {
+							real2[U(p)] += real1[i] * (V(p) - p);
+							imag2[U(p)] += imag1[i] * (V(p) - p);
+							real2[V(p)] += real1[i] * (p - U(p));
+							imag2[V(p)] += imag1[i] * (p - U(p));
+						}
 					}
-					for (let i = a.length / 2; i < a.length; i++) {
-						let p = a.length - (a.length - i) * K;
-						b[U(p)] = cadd(
-							b[U(p)],
-							cmul(a[i], [(1 - I(p - U(p))), 0])
-						);
-						b[V(p) % a.length] = cadd(
-							b[V(p) % a.length],
-							cmul(a[i], [(1 - I(p - V(p))), 0])
-						);
+					for (let i = BUFSIZE / 2; i < BUFSIZE; i++) {
+						let p = BUFSIZE - (BUFSIZE - i) * K;
+						if (i < BUFSIZE - CLIP) {
+							real2[U(p)] += real1[i] * (V(p) - p);
+							imag2[U(p)] += imag1[i] * (V(p) - p);
+							real2[V(p) % BUFSIZE] += real1[i] * (p - U(p));
+							imag2[V(p) % BUFSIZE] += imag1[i] * (p - U(p));
+						}
 					}
 				}
-				that.port.postMessage([a, b]);
-				a = b;
-				FFT(a, a.length, -1);
-				return a.map(x => x[0] / a.length);
+				that.port.postMessage([
+					[real1, imag1],
+					[real2, imag2]
+				]);
+				FFT(real2, imag2, BUFSIZE, -1);
+				real2.forEach((v, i) => {
+					real2[i] = v / BUFSIZE;
+				})
+				return real2;
 			}
 
 			// ----7-2-5---5-----6-4---2-----------7--2-5---5-----6--4-1-2-----------2-4-5-----5-4---4---2-7---6-5---4-3-2-------1-----7-7-------
@@ -147,24 +171,24 @@
 					this.port.onmessage = function(mess) {
 						that.diaozi = mess.data;
 					};
-					this.buff = new Float64Array(1024).fill(0.0);
+					this.buff = new Float32Array(BUFSIZE).fill(0.0);
 					this.ptr = 0;
 					this.diaozi = 0.0;
 				}
 				process(inputs, outputs, parameters) {
 					try {
-						const input = inputs[0]
-						const output = outputs[0]
+						const input = inputs[0];
+						const output = outputs[0];
 						if (input.length === 0) {
-							throw new Error("playback stopped");
+							return true;
 						}
 						for (let i = 0; i < input[0].length; ++i) {
 							output[0][i] = this.buff[i + this.ptr];
 							this.buff[i + this.ptr] = input[0][i];
 						}
 						this.ptr += input[0].length;
-						if (this.ptr >= 1024) {
-							this.buff = pitch(this.buff, Math.pow(2, this.diaozi), this);
+						if (this.ptr >= BUFSIZE) {
+							this.buff.set(pitch(this.buff, Math.pow(2, this.diaozi), this), 0);
 							this.ptr = 0;
 						}
 						for (let channel = 1; channel < output.length; ++channel) {
@@ -174,27 +198,27 @@
 						}
 						return true;
 					} catch (e) {
-						this.port.postMessage(e.message);
-						return true;
+						this.port.postMessage(e.stack);
+						return false;
 					}
 				}
 			}
 
 			registerProcessor('white-noise-processor', WhiteNoiseProcessor);
-			//return pitch(arguments[0], arguments[1]);
+			// return pitch(arguments[0], arguments[1]);
 		}
 
-		/*a=	xyz([1,2,3,4,3,2,1,2], 1);
-			 out = "\n" + a.map(x=> "\n" + x.toFixed(2));
-			 document.body.innerText = out;
-			 throw new Error("ok");*/
+		// a = xyz([1, 0, 1, 0, 1, 0, 1, 0], 1);
+		// out = a.map(x => x.map(y => y.toFixed(2))).join('\n');
+		// out;
+		// throw new Error("ok");
 
 		let whiteNoiseNode;
 
 		document.getElementById("map-smooth").addEventListener("click", async function() {
 			const audioCtx = new(window.AudioContext || window.webkitAudioContext)();
 
-			const data = await (await fetch("test.wav")).arrayBuffer();
+			const data = await (await fetch("example.ogg")).arrayBuffer();
 			const myArrayBuffer = await audioCtx.decodeAudioData(data);
 			// Get an AudioBufferSourceNode.
 			// This is the AudioNode to use when we want to play an AudioBuffer
@@ -240,21 +264,45 @@
 		let gview = document.getElementById("view").getContext("2d");
 
 		function graph(data) {
-			gview.clearRect(0, 0, 600, 100);
+			gview.clearRect(0, 0, 600, 200);
+			gview.fillStyle = "#f8f8f8";
+			gview.fillRect(0, 0, 600, 200);
+			let color = ["red", "blue"];
+			gview.beginPath();
+			for (let i = 0; i < 600; i += 25 / 3) {
+				gview.moveTo(i, 0);
+				gview.lineTo(i, 200);
+			}
+			gview.strokeStyle = "grey";
+			gview.stroke();
+			gview.beginPath();
+			for (let i = 0; i < 600; i += 100) {
+				gview.moveTo(i, 0);
+				gview.lineTo(i, 200);
+			}
+			gview.strokeStyle = "black";
+			gview.stroke();
 			data.forEach((arr, i) => {
+				let [real, imag] = arr;
 				gview.beginPath();
-				gview.moveTo(0, 100);
-				let color = ["red", "blue"];
-				for (let i = 1; i < arr.length / 2; i++) {
-					let p0 = arr[i],
-						p1 = arr[arr.length - i];
-					let freq = 48000 * i / arr.length;
+				gview.moveTo(0, 200);
+				for (let i = Math.max(1,
+							Math.floor(
+								(1 / 4 * 261.62) * real.length / 48000
+							)),
+						I = Math.min(real.length / 2,
+							Math.ceil(
+								(16 * 261.62) * real.length / 48000
+							)); i < I; i++) {
+					let p0 = [real[i], imag[i]],
+						p1 = [real[real.length - i], imag[real.length - i]];
+					let freq = 48000 * i / real.length;
 					let cdis = c => Math.sqrt(c[0] * c[0] + c[1] * c[1]);
-					let power = (cdis(p0) + cdis(p1)) / arr.length;
-					gview.lineTo(300 + 300 * Math.log(freq / 256) / Math.log(16),
-						100 - 100 * power);
+					let power = (cdis(p0) + cdis(p1)) * 8 / real.length;
+					gview.lineTo(300 + 300 * Math.log(freq / 261.62 / 2) / Math.log(8),
+						200 - 200 * power);
 				}
-				gview.moveTo(600, 100);
+				gview.moveTo(600, 200);
 				gview.closePath();
 				gview.strokeStyle = color[i];
 				//gview.fillStyle = "#00FF00";
@@ -262,7 +310,6 @@
 				gview.stroke();
 				//gview.fill();
 			});
-
 			/*
 			gview.beginPath();
 			gview.moveTo(0, 100);
