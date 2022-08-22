@@ -40,7 +40,7 @@
 
 		function xyz() { // white-noise-processor.js
 			// https://zhuanlan.zhihu.com/p/347514286
-			const CLIP = 2;
+			const CLIP = 0;
 			const BUFSIZE = 4096;
 			const pi = Math.PI;
 			let rev = new Uint32Array(BUFSIZE); //rev[i]为i的二进制翻转
@@ -112,7 +112,7 @@
 				FFT(real1, imag1, BUFSIZE, 1);
 				const U = Math.floor,
 					V = x => U(x) + 1;
-				if (K >= 1) {
+				if (K >= 9999) {
 					for (let i = 0; i < BUFSIZE / 2; i++) {
 						let p = i / K;
 						if (p > CLIP) {
