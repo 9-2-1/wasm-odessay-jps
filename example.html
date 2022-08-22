@@ -107,30 +107,18 @@
 			function pitch(inp, K, that) {
 				real1.set(inp, 0);
 				imag1.fill(0.0);
-				real2.fill(0.0);
-				imag2.fill(0.0);
 				FFT(real1, imag1, BUFSIZE, 1);
 				const U = Math.floor,
 					V = x => U(x) + 1;
-				if (K >= 9999) {
-					for (let i = 0; i < BUFSIZE / 2; i++) {
-						let p = i / K;
-						if (p > CLIP) {
-							real2[i] = real1[U(p)] * (V(p) - p) + real1[V(p)] * (p - U(p));
-							imag2[i] = imag1[U(p)] * (V(p) - p) + imag1[V(p)] * (p - U(p));
-						}
-					}
-				} else {
-					real2.fill(0.0);
-					imag2.fill(0.0);
-					for (let i = 0; i < BUFSIZE / 2; i++) {
-						let p = i * K;
-						if (i > CLIP) {
-							real2[U(p)] += real1[i] * (V(p) - p);
-							imag2[U(p)] += imag1[i] * (V(p) - p);
-							real2[V(p)] += real1[i] * (p - U(p));
-							imag2[V(p)] += imag1[i] * (p - U(p));
-						}
+				real2.fill(0.0);
+				imag2.fill(0.0);
+				for (let i = 0; i < BUFSIZE / 2; i++) {
+					let p = i * K;
+					if (i > CLIP && V(p) < BUFSIZE / 2) {
+						real2[U(p)] += real1[i] * (V(p) - p);
+						imag2[U(p)] += imag1[i] * (V(p) - p);
+						real2[V(p)] += real1[i] * (p - U(p));
+						imag2[V(p)] += imag1[i] * (p - U(p));
 					}
 				}
 				for (let i = 0; i < BUFSIZE / 2; i++) {
