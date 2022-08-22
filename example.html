@@ -37,11 +37,14 @@
 			return 'data:text/javascript;base64,' + btoa('(' + f.toString().replace(/[^\x01-\xfe]/g, "?") + ')()');
 		}
 
+		const DESAMPLE = 2;
 
 		function xyz() { // white-noise-processor.js
 			// https://zhuanlan.zhihu.com/p/347514286
 			const CLIP = 0;
-			const BUFSIZE = 4096;
+			const BUFSIZE = 2048;
+			const DESAMPLE = 2;
+			const COVERCNT = 4;
 			const pi = Math.PI;
 			let rev = new Uint32Array(BUFSIZE); //rev[i]为i的二进制翻转
 
@@ -149,7 +152,8 @@
 					this.port.onmessage = function(mess) {
 						that.diaozi = mess.data;
 					};
-					this.buff = new Float32Array(BUFSIZE).fill(0.0);
+					this.inbuff = new Float32Array(BUFSIZE).fill(0.0);
+					this.outbuff = new Float32Array(BUFSIZE).fill(0.0);
 					this.ptr = 0;
 					this.diaozi = 0.0;
 				}
@@ -160,15 +164,38 @@
 						if (input.length === 0) {
 							return true;
 						}
-						output[0].set(this.buff.subarray(this.ptr, this.ptr + output[0].length), 0);
-						this.buff.set(input[0], this.ptr);
-						this.ptr += input[0].length;
-						if (this.ptr >= BUFSIZE / 2) {
-							let tmp = Float32Array.from(this.buff.subarray(0, this.ptr));
-							this.buff.copyWithin(0, this.ptr);
-							this.buff.set(tmp, this.ptr);
-							this.buff.set(pitch(this.buff, Math.pow(2, this.diaozi), this)
-								.subarray(this.ptr/2, this.ptr*3/2), 0);
+						let U = Math.floor,
+							V = x => U(x) + 1;
+						output[0].forEach((_, i) => {
+							let p = i / DESAMPLE;
+							output[0][i] =
+								this.outbuff[this.ptr + U(p)] * (V(p) - p) +
+								this.outbuff[this.ptr + V(p)] * (p - U(p));
+						});
+						this.ptr--;
+						input[0].forEach((v, i) => {
+							if (i % DESAMPLE == 0) {
+								this.ptr++;
+								this.inbuff[this.ptr] = v / DESAMPLE;
+							} else {
+								this.inbuff[this.ptr] += v / DESAMPLE;
+							}
+						})
+						this.ptr++;
+						if (this.ptr >= BUFSIZE / COVERCNT) {
+							if (COVERCNT > 1) {
+								let tmp = Float32Array.from(this.inbuff.subarray(0, this.ptr));
+								this.inbuff.copyWithin(0, this.ptr);
+								this.inbuff.set(tmp, this.ptr);
+								this.outbuff.copyWithin(0, this.ptr);
+								this.outbuff.subarray(BUFSIZE - this.ptr, BUFSIZE).fill(0.0);
+							} else {
+								this.outbuff.fill(0.0);
+							}
+							let pitched = pitch(this.inbuff, Math.pow(2, this.diaozi), this);
+							for (let i = 0; i < BUFSIZE; i++) {
+								this.outbuff[i] += pitched[i] / COVERCNT;
+							}
 							this.ptr = 0;
 						}
 						for (let channel = 1; channel < output.length; ++channel) {
