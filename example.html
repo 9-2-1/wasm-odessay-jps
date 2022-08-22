@@ -242,10 +242,12 @@
 		let gview = document.getElementById("view").getContext("2d");
 
 		function graph(data) {
+			const FREQ = 48000;
 			gview.clearRect(0, 0, 600, 200);
 			gview.fillStyle = "#f8f8f8";
 			gview.fillRect(0, 0, 600, 200);
 			let color = ["red", "blue"];
+			gview.lineWidth = 1;
 			gview.beginPath();
 			for (let i = 0; i < 600; i += 25 / 3) {
 				gview.moveTo(i, 0);
@@ -260,51 +262,41 @@
 			}
 			gview.strokeStyle = "black";
 			gview.stroke();
+			gview.beginPath();
+			gview.moveTo(200, 0);
+			gview.lineTo(200, 200);
+			gview.strokeStyle = "red";
+			gview.stroke();
 			data.forEach((arr, i) => {
 				let [real, imag] = arr;
 				gview.beginPath();
 				gview.moveTo(0, 200);
 				for (let i = Math.max(1,
 							Math.floor(
-								(1 / 4 * 261.62) * real.length / 48000
+								(1 / 4 * 261.62) * real.length / FREQ
 							)),
 						I = Math.min(real.length / 2,
 							Math.ceil(
-								(16 * 261.62) * real.length / 48000
+								(16 * 261.62) * real.length / FREQ
 							)); i < I; i++) {
 					let p0 = [real[i], imag[i]],
 						p1 = [real[real.length - i], imag[real.length - i]];
-					let freq = 48000 * i / real.length;
+					let freq = FREQ * i / real.length;
 					let cdis = c => Math.sqrt(c[0] * c[0] + c[1] * c[1]);
-					let power = (cdis(p0) + cdis(p1)) * 8 / real.length;
+					let power = Math.log((cdis(p0) + cdis(p1)) / real.length) / Math.log(0.1);
 					gview.lineTo(300 + 300 * Math.log(freq / 261.62 / 2) / Math.log(8),
-						200 - 200 * power);
+						50 * power);
 				}
-				gview.moveTo(600, 200);
+				gview.lineTo(600, 200);
 				gview.closePath();
 				gview.strokeStyle = color[i];
-				//gview.fillStyle = "#00FF00";
+				gview.fillStyle = color[i];
 				gview.lineWidth = 1;
 				gview.stroke();
-				//gview.fill();
+				gview.globalAlpha = 0.2;
+				gview.fill();
+				gview.globalAlpha = 1;
 			});
-			/*
-			gview.beginPath();
-			gview.moveTo(0, 100);
-			for (let i = 1; i < arr.length / 2; i++) {
-				let p0 = arr[i],
-					p1 = arr[arr.length - i];
-				let freq = 48000 * i / arr.length;
-				let cdis = c => Math.sqrt( /*c[0] * c[0] + c[1] * c[1]);
-				let power = (cdis(p0) + cdis(p1)) / arr.length;
-				gview.lineTo(300 + 300 * Math.log(freq / 256) / Math.log(16),
-					100 - 100 * power);
-			}
-			gview.moveTo(600, 100);
-			gview.closePath();
-			gview.strokeStyle = "#0000FF";
-			gview.lineWidth = 1;
-			gview.stroke();*/
 		}
 
 		document.getElementById("playbackrate").addEventListener("input", function() {
