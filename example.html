@@ -172,19 +172,19 @@
 						if (input.length === 0) {
 							return true;
 						}
-						for (let i = 0; i < input[0].length; ++i) {
-							output[0][i] = this.buff[i + this.ptr];
-							this.buff[i + this.ptr] = input[0][i];
-						}
+						output[0].set(this.buff.subarray(this.ptr, this.ptr + output[0].length), 0);
+						this.buff.set(input[0], this.ptr);
 						this.ptr += input[0].length;
-						if (this.ptr >= BUFSIZE) {
-							this.buff.set(pitch(this.buff, Math.pow(2, this.diaozi), this), 0);
+						if (this.ptr >= BUFSIZE / 2) {
+							let tmp = Float32Array.from(this.buff.subarray(0, this.ptr));
+							this.buff.copyWithin(0, this.ptr);
+							this.buff.set(tmp, this.ptr);
+							this.buff.set(pitch(this.buff, Math.pow(2, this.diaozi), this)
+								.subarray(this.ptr/2, this.ptr*3/2), 0);
 							this.ptr = 0;
 						}
 						for (let channel = 1; channel < output.length; ++channel) {
-							for (let i = 0; i < input[channel].length; ++i) {
-								output[channel][i] = output[0][i];
-							}
+							output[channel].set(output[0], 0);
 						}
 						return true;
 					} catch (e) {
