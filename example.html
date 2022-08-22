@@ -120,13 +120,6 @@
 							imag2[i] = imag1[U(p)] * (V(p) - p) + imag1[V(p)] * (p - U(p));
 						}
 					}
-					for (let i = BUFSIZE / 2; i < BUFSIZE; i++) {
-						let p = BUFSIZE - (BUFSIZE - i) / K;
-						if (p < BUFSIZE - CLIP) {
-							real2[i] = real1[U(p)] * (V(p) - p) + real1[V(p) % BUFSIZE] * (p - U(p));
-							imag2[i] = imag1[U(p)] * (V(p) - p) + imag1[V(p) % BUFSIZE] * (p - U(p));
-						}
-					}
 				} else {
 					real2.fill(0.0);
 					imag2.fill(0.0);
@@ -139,16 +132,13 @@
 							imag2[V(p)] += imag1[i] * (p - U(p));
 						}
 					}
-					for (let i = BUFSIZE / 2; i < BUFSIZE; i++) {
-						let p = BUFSIZE - (BUFSIZE - i) * K;
-						if (i < BUFSIZE - CLIP) {
-							real2[U(p)] += real1[i] * (V(p) - p);
-							imag2[U(p)] += imag1[i] * (V(p) - p);
-							real2[V(p) % BUFSIZE] += real1[i] * (p - U(p));
-							imag2[V(p) % BUFSIZE] += imag1[i] * (p - U(p));
-						}
-					}
 				}
+				for (let i = 0; i < BUFSIZE / 2; i++) {
+					real2[i] *= 2;
+					imag2[i] *= 2;
+				}
+				real2.subarray(BUFSIZE / 2, BUFSIZE).fill(0.0);
+				imag2.subarray(BUFSIZE / 2, BUFSIZE).fill(0.0);
 				that.port.postMessage([
 					[real1, imag1],
 					[real2, imag2]
