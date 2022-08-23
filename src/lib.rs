@@ -209,7 +209,7 @@ impl<'a> AStarJPS<'a> {
                 return false;
             }
             let index = self.index(pos);
-            if self.distance[index] != isize::MAX {
+            if self.distance[index] == -1 {
                 return false;
             }
             if pos == end
@@ -238,7 +238,7 @@ impl<'a> AStarJPS<'a> {
                 return false;
             }
             let index = self.index(pos);
-            if self.distance[index] != isize::MAX {
+            if self.distance[index] == -1 {
                 return false;
             }
             let turning = self.rushmove(
