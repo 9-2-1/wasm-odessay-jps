@@ -292,7 +292,7 @@ impl<'a> AStarJPS<'a> {
         self.point_add(end, begin, 0, pos!(0, 0));
         while let Some(pinfo) = self.openlist.pop() {
             #[cfg(feature = "debug")]
-            console_log(format!("{:?} ", self.openlist).as_str());
+            console_log(format!("{:?} <- {:?} ", pinfo, self.openlist).as_str());
 
             if pinfo.distance == self.distance[self.index(pinfo.position)] {
                 if pinfo.position == begin {
