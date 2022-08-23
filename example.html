@@ -41,7 +41,8 @@
 		function xyz() { // white-noise-processor.js
 			// https://zhuanlan.zhihu.com/p/347514286
 			const CLIP = 0;
-			const BUFSIZE = 4096;
+			const BUFSIZE = 1024;
+			const COVERS = 4;
 			const pi = Math.PI;
 			let rev = new Uint32Array(BUFSIZE); //rev[i]为i的二进制翻转
 
@@ -163,12 +164,14 @@
 						output[0].set(this.buff.subarray(this.ptr, this.ptr + output[0].length), 0);
 						this.buff.set(input[0], this.ptr);
 						this.ptr += input[0].length;
-						if (this.ptr >= BUFSIZE / 2) {
+						if (this.ptr >= BUFSIZE / COVERS) {
 							let tmp = Float32Array.from(this.buff.subarray(0, this.ptr));
-							this.buff.copyWithin(0, this.ptr);
-							this.buff.set(tmp, this.ptr);
+							if (COVERS > 1) {
+								this.buff.copyWithin(0, this.ptr);
+								this.buff.set(tmp, BUFSIZE - this.ptr);
+							}
 							this.buff.set(pitch(this.buff, Math.pow(2, this.diaozi), this)
-								.subarray(this.ptr/2, this.ptr*3/2), 0);
+								.subarray((BUFSIZE - this.ptr) / 2, (BUFSIZE + this.ptr) / 2), 0);
 							this.ptr = 0;
 						}
 						for (let channel = 1; channel < output.length; ++channel) {
