@@ -104,24 +104,42 @@
 				imag1 = new Float32Array(BUFSIZE);
 			let real2 = new Float32Array(BUFSIZE),
 				imag2 = new Float32Array(BUFSIZE);
+			let last_phase = new Float32Array(BUFSIZE);
+			let last_phase2 = new Float32Array(BUFSIZE);
+			let graph_freq = new Float32Array(BUFSIZE);
+			let graph_magn = new Float32Array(BUFSIZE);
 
 			function pitch(inp, K, that) {
 				for (let i = 0; i < BUFSIZE; i++) {
 					real1[i] = inp[i] * (0.5 - 0.5 * Math.cos(i / (BUFSIZE - 1) * 2 * pi));
 				}
 				imag1.fill(0.0);
+				graph_freq.fill(0.0);
+				graph_magn.fill(0.0);
 				FFT(real1, imag1, BUFSIZE, 1);
 				const U = Math.floor,
 					V = x => U(x) + 1;
 				real2.fill(0.0);
 				imag2.fill(0.0);
 				for (let i = 0; i < BUFSIZE / 2; i++) {
-					let p = i * K;
-					if (i > CLIP && V(p) < BUFSIZE / 2) {
-						real2[U(p)] += real1[i] * (V(p) - p);
-						imag2[U(p)] += imag1[i] * (V(p) - p);
-						real2[V(p)] += real1[i] * (p - U(p));
-						imag2[V(p)] += imag1[i] * (p - U(p));
+					let freq = i;
+					let magn = Math.sqrt(real1[i] * real1[i] + imag1[i] * imag1[i]);
+					let phase = Math.atan2(real1[i], imag1[i]);
+					let phase_change = (phase - last_phase[i]) / 2 / pi - i / COVERS;
+					last_phase[i] = phase;
+					phase_change -= Math.round(phase_change);
+					let real_freq = i + phase_change * COVERS;
+					let real_freq_2 = real_freq * K;
+					let p = Math.round(real_freq_2);
+					let phase_change_2 = (real_freq_2 - p) / COVERS * 2 * pi;
+					graph_freq[i] = real_freq_2;
+					graph_magn[i] = magn;
+					last_phase2[p] += phase_change_2;
+					let real = magn * Math.sin(last_phase2[p]);
+					let imag = magn * Math.cos(last_phase2[p]);
+					if (p < BUFSIZE / 2) {
+						real2[p] += real;
+						imag2[p] += imag;
 					}
 				}
 				for (let i = 0; i < BUFSIZE / 2; i++) {
@@ -131,8 +149,7 @@
 				real2.subarray(BUFSIZE / 2, BUFSIZE).fill(0.0);
 				imag2.subarray(BUFSIZE / 2, BUFSIZE).fill(0.0);
 				that.port.postMessage([
-					[real1, imag1],
-					[real2, imag2]
+					[graph_freq, graph_magn]
 				]);
 				FFT(real2, imag2, BUFSIZE, -1);
 				real2.forEach((v, i) => {
@@ -173,7 +190,7 @@
 								this.buff.set(tmp, BUFSIZE - this.ptr);
 							}
 							this.buff.set(pitch(this.buff, Math.pow(2, this.diaozi), this)
-								.subarray((BUFSIZE - this.ptr) / 2, (BUFSIZE + this.ptr) / 2), 0);
+								.subarray(0, this.ptr), 0);
 							this.ptr = 0;
 						}
 						for (let channel = 1; channel < output.length; ++channel) {
@@ -273,24 +290,25 @@
 			gview.strokeStyle = "red";
 			gview.stroke();
 			data.forEach((arr, i) => {
-				let [real, imag] = arr;
+				let [freq, magn] = arr;
 				gview.beginPath();
 				gview.moveTo(0, 200);
 				for (let i = Math.max(1,
 							Math.floor(
-								(1 / 4 * 261.62) * real.length / FREQ
+								(1 / 4 * 261.62) * freq.length / FREQ
 							)),
-						I = Math.min(real.length / 2,
+						I = Math.min(freq.length / 2,
 							Math.ceil(
-								(16 * 261.62) * real.length / FREQ
+								(16 * 261.62) * freq.length / FREQ
 							)); i < I; i++) {
-					let p0 = [real[i], imag[i]],
-						p1 = [real[real.length - i], imag[real.length - i]];
-					let freq = FREQ * i / real.length;
-					let cdis = c => Math.sqrt(c[0] * c[0] + c[1] * c[1]);
-					let power = Math.log((cdis(p0) + cdis(p1)) / real.length) / Math.log(0.1);
-					gview.lineTo(300 + 300 * Math.log(freq / 261.62 / 2) / Math.log(8),
-						50 * power);
+					let freqz = FREQ * freq[i] / freq.length;
+					let power = (magn[i] / freq.length);
+					gview.lineTo(300 + 300 * Math.log(freqz / 261.62 / 2) / Math.log(8),
+						200);
+					gview.lineTo(300 + 300 * Math.log(freqz / 261.62 / 2) / Math.log(8),
+						200 - 200 * power);
+					gview.lineTo(300 + 300 * Math.log(freqz / 261.62 / 2) / Math.log(8),
+						200);
 				}
 				gview.lineTo(600, 200);
 				gview.closePath();
