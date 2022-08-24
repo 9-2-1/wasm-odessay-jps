@@ -228,6 +228,15 @@ impl<'a> AStarJPS<'a> {
             if self.distance[index] == -1 {
                 return false;
             }
+            if pos == end
+                || (!self.can_walk(pos - dir.xonly())
+                    && self.can_walk(pos - dir.xonly() + dir.yonly()))
+                || (!self.can_walk(pos - dir.yonly())
+                    && self.can_walk(pos - dir.yonly() + dir.xonly()))
+            {
+                self.point_add(pos, end, dist, pinfo.position);
+                return true;
+            }
             let turning = self.rushmove(
                 &Pointinfo {
                     position: pos,
@@ -245,15 +254,6 @@ impl<'a> AStarJPS<'a> {
                 dir.yonly(),
                 end,
             );
-            if pos == end
-                || (!self.can_walk(pos - dir.xonly())
-                    && self.can_walk(pos - dir.xonly() + dir.yonly()))
-                || (!self.can_walk(pos - dir.yonly())
-                    && self.can_walk(pos - dir.yonly() + dir.xonly()))
-            {
-                self.point_add(pos, end, dist, pinfo.position);
-                return true;
-            }
             if turning == true {
                 self.point_add(pos, end, dist, pinfo.position);
                 return true;
