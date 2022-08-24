@@ -155,6 +155,11 @@ impl<'a> AStarJPS<'a> {
         };
     }
 
+    fn simphfunc(a: Pos, b: Pos) -> isize {
+        let diff = a - b;
+        return (((diff.x * diff.x + diff.y * diff.y) as f64).sqrt() * 100.0) as isize;
+    }
+
     fn index(&self, point: Pos) -> usize {
         return (point.y * self.size.x + point.x) as usize;
     }
@@ -168,6 +173,14 @@ impl<'a> AStarJPS<'a> {
     }
 
     fn point_add(&mut self, point: Pos, end: Pos, dist: isize, from: Pos) {
+        return self.point_add_hval(point, dist, from, Self::hfunc(point, end));
+    }
+
+    fn point_add_simp(&mut self, point: Pos, end: Pos, dist: isize, from: Pos) {
+        return self.point_add_hval(point, dist, from, Self::simphfunc(point, end));
+    }
+
+    fn point_add_hval(&mut self, point: Pos, dist: isize, from: Pos, hval: isize) {
         if self.can_walk(point) {
             let index = self.index(point);
             let dist_now = &mut self.distance[index];
@@ -177,7 +190,7 @@ impl<'a> AStarJPS<'a> {
                 self.openlist.push(Pointinfo {
                     position: point,
                     distance: dist,
-                    dist_gh: dist + Self::hfunc(point, end),
+                    dist_gh: dist + hval,
                 });
             }
         }
@@ -324,12 +337,129 @@ impl<'a> AStarJPS<'a> {
             path.push(find);
         }
 
-        return path;
+        return vec![begin, end];
+        // return path;
     }
 
-    fn simplify(&self, path: &Vec<Pos>) -> Vec<Pos> {
+    fn simplify(&mut self, path: &Vec<Pos>) -> Vec<Pos> {
         let mut simpath = Vec::new();
-        simpath.push(pos!(0, 0));
+        let i = 0_usize;
+        let j = 1_usize;
+        let begin = path[i];
+        let end = path[j];
+        let mut dir = begin - end; // 就是反过来的
+        if dir.x == 0 || dir.y == 0 {
+            return path.clone();
+        }
+        dir.x = if dir.x > 0 {
+            1
+        } else if dir.x == 0 {
+            0
+        } else {
+            -1
+        };
+        dir.y = if dir.y > 0 {
+            1
+        } else if dir.y == 0 {
+            0
+        } else {
+            -1
+        };
+
+        self.frompos = vec![pos!(-1, -1); self.map.len()];
+        self.distance = vec![isize::MAX; self.map.len()];
+        self.openlist.clear();
+
+        let mut pointlist = Vec::new();
+
+        let mut cpos = end;
+        while cpos.y * dir.y <= begin.y * dir.y {
+            cpos.x = end.x;
+            while cpos.x * dir.x <= begin.x * dir.x {
+                if self.can_walk(cpos)
+                    && self.can_walk(cpos + dir)
+                    && (!self.can_walk(cpos + dir.xonly()) || !self.can_walk(cpos + dir.yonly()))
+                {
+                    pointlist.push(cpos);
+                }
+                cpos.x += dir.x;
+            }
+            cpos.y += dir.y;
+        }
+
+        pointlist.push(begin);
+        self.point_add_simp(end, begin, 0, end);
+
+        while let Some(pinfo) = self.openlist.pop() {
+            #[cfg(feature = "debug")]
+            console_log(format!("{:?} <- {:?} ", pinfo, self.openlist).as_str());
+
+            let cpos = pinfo.position;
+            if cpos == begin {
+                break;
+            }
+
+            let dist = pinfo.distance;
+            pointlist.iter().for_each(|pos| {
+                let pos = *pos;
+                let diff = pos - cpos;
+                if diff.x * dir.x >= 0 && diff.y * dir.y >= 0 {
+                    let points = line_points(cpos, pos);
+                    let mut can_go = true;
+                    points.iter().for_each(|point| {
+                        if !self.can_walk(*point) {
+                            can_go = false;
+                        }
+                    });
+                    if can_go {
+                        let dist2 =
+                            (((diff.x * diff.x + diff.y * diff.y) as f64).sqrt() * 100.0) as isize;
+                        self.point_add_simp(pos, begin, dist + dist2, cpos);
+                        self.point_add_simp(
+                            pos + dir,
+                            begin,
+                            dist + dist2 + 141, /* (2.0).sqrt()*100.0 */
+                            pos,
+                        );
+                    }
+                }
+            });
+
+            #[cfg(feature = "debug")]
+            console_log(self.debug().as_str());
+        }
+
+        let i = self.index(begin);
+        if self.distance[i] != isize::MAX {
+            let mut find = begin;
+            let mut cdir = pos!(0, 0);
+            while end != find {
+                let next = self.frompos[self.index(find)];
+                let dir = find - next;
+
+                // 如果连续三个点在同一条直线上，则不输出第二个点
+                if cdir == pos!(0, 0) || dir.x * cdir.y - dir.y * cdir.x != 0 {
+                    simpath.push(find);
+                }
+
+                find = next;
+                cdir = dir;
+
+                if !self.can_walk(find) {
+                    // 出问题了！
+
+                    #[cfg(feature = "debug")]
+                    {
+                        console_log(format!("{:?}", self).as_str());
+                        console_log(format!("{:?}", find).as_str());
+                    }
+
+                    break;
+                }
+            }
+            simpath.push(find);
+        }
+
         return simpath;
     }
 
