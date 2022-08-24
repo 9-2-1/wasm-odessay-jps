@@ -104,22 +104,9 @@ impl Sub for Pos {
 struct AStarJPS<'a> {
     size: Pos,
     map: &'a [u8],
-    direction: Vec<i8>,
+    frompos: Vec<Pos>,
     distance: Vec<isize>,
     openlist: BinaryHeap<Pointinfo>,
-}
-
-macro_rules! dir {
-    ($v:expr) => {{
-        let dir: isize = (($v) as isize) - 1;
-        pos!(dir % 3 - 1, dir / 3 - 1)
-    }};
-}
-
-macro_rules! dir_i8 {
-    ($d:expr) => {{
-        (($d.y + 1) * 3 + ($d.x + 1) + 1) as i8
-    }};
 }
 
 fn roundidiv(a: isize, b: isize) -> isize {
@@ -153,7 +140,7 @@ impl<'a> AStarJPS<'a> {
         return Self {
             size: size,
             map: map,
-            direction: Vec::with_capacity(siz),
+            frompos: Vec::with_capacity(siz),
             distance: Vec::with_capacity(siz),
             openlist: BinaryHeap::new(),
         };
@@ -180,12 +167,12 @@ impl<'a> AStarJPS<'a> {
             && self.map[self.index(point)] == 0;
     }
 
-    fn point_add(&mut self, point: Pos, end: Pos, dist: isize, dir: Pos) {
+    fn point_add(&mut self, point: Pos, end: Pos, dist: isize, from: Pos) {
         if self.can_walk(point) {
             let index = self.index(point);
             let dist_now = &mut self.distance[index];
             if *dist_now > dist {
-                self.direction[index] = dir_i8!(dir);
+                self.frompos[index] = from;
                 *dist_now = dist;
                 self.openlist.push(Pointinfo {
                     position: point,
@@ -216,7 +203,7 @@ impl<'a> AStarJPS<'a> {
                 || (!self.can_walk(pos - dir.flipxy()) && self.can_walk(pos - dir.flipxy() + dir))
                 || (!self.can_walk(pos + dir.flipxy()) && self.can_walk(pos + dir.flipxy() + dir))
             {
-                self.point_add(pos, end, dist, dir);
+                self.point_add(pos, end, dist, pinfo.position);
                 return true;
             }
             self.distance[index] = -1;
@@ -264,11 +251,11 @@ impl<'a> AStarJPS<'a> {
                 || (!self.can_walk(pos - dir.yonly())
                     && self.can_walk(pos - dir.yonly() + dir.xonly()))
             {
-                self.point_add(pos, end, dist, dir);
+                self.point_add(pos, end, dist, pinfo.position);
                 return true;
             }
             if turning == true {
-                self.point_add(pos, end, dist, dir);
+                self.point_add(pos, end, dist, pinfo.position);
                 return true;
             }
             self.distance[index] = -1;
@@ -278,18 +265,18 @@ impl<'a> AStarJPS<'a> {
     }
 
     fn find(&mut self, begin: Pos, end: Pos) -> Vec<Pos> {
-        self.direction.clear();
+        self.frompos.clear();
         self.distance.clear();
         self.openlist.clear();
 
         let mut path = Vec::new();
 
         for _x in 0..self.map.len() {
-            self.direction.push(0_i8);
+            self.frompos.push(pos!(-1, -1));
             self.distance.push(isize::MAX);
         }
 
-        self.point_add(end, begin, 0, pos!(0, 0));
+        self.point_add(end, begin, 0, end);
         while let Some(pinfo) = self.openlist.pop() {
             #[cfg(feature = "debug")]
             console_log(format!("{:?} <- {:?} ", pinfo, self.openlist).as_str());
@@ -316,15 +303,22 @@ impl<'a> AStarJPS<'a> {
 
         if self.distance[self.index(begin)] != isize::MAX {
             let mut find = begin;
-            let mut cdir = 0;
+            let mut cdir = pos!(0, 0);
             while end != find {
-                let dir = self.direction[self.index(find)];
-                if dir != 0 && dir != cdir {
-                    cdir = dir;
+                let next = self.frompos[self.index(find)];
+                let dir = find - next;
+
+                // 如果连续三个点在同一条直线上，则不输出第二个点
+                if cdir == pos!(0, 0) || dir.x * cdir.y - dir.y * cdir.x != 0 {
                     path.push(find);
                 }
-                find = find - dir!(cdir);
+
+                find = next;
+                cdir = dir;
+
                 if !self.can_walk(find) {
+                    // 出问题了！
+
                     #[cfg(feature = "debug")]
                     {
                         console_log(format!("{:?}", self).as_str());
@@ -356,9 +350,29 @@ impl<'a> AStarJPS<'a> {
 
         for y in 0..self.size.y {
             for x in 0..self.size.x {
-                let i = self.index(pos!(x, y));
+                let here = pos!(x, y);
+                let i = self.index(here);
                 dir += if self.map[i] == 0 {
-                    DIRSYN[self.direction[i] as usize]
+                    if self.frompos[i] == pos!(-1, -1) {
+                        "::"
+                    } else {
+                        let mut cdir = here - self.frompos[i];
+                        cdir.x = if cdir.x > 0 {
+                            1
+                        } else if cdir.x == 0 {
+                            0
+                        } else {
+                            -1
+                        };
+                        cdir.y = if cdir.y > 0 {
+                            1
+                        } else if cdir.y == 0 {
+                            0
+                        } else {
+                            -1
+                        };
+                        DIRSYN[((cdir.y + 1) * 3 + (cdir.x + 2)) as usize]
+                    }
                 } else {
                     "  "
                 };
@@ -391,12 +405,12 @@ impl<'a> AStarJPS<'a> {
                 for i in 0..(lpath.len() - 1) {
                     let index = self.index(lpath[i]);
                     let dir = lpath[i] - lpath[i + 1];
-                    let dir = dir_i8!(dir);
+                    let dir = ((dir.y + 1) * 3 + (dir.x + 2)) as i8;
                     map[index] = dir;
                 }
             }
             let index = self.index(path[path.len() - 1]);
-            map[index] = dir_i8!(pos!(0, 0));
+            map[index] = 5;
         }
 
         const DIRSYN: [&'static str; 11] = [
