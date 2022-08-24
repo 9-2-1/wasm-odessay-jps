@@ -265,16 +265,11 @@ impl<'a> AStarJPS<'a> {
     }
 
     fn find(&mut self, begin: Pos, end: Pos) -> Vec<Pos> {
-        self.frompos.clear();
-        self.distance.clear();
-        self.openlist.clear();
-
         let mut path = Vec::new();
 
-        for _x in 0..self.map.len() {
-            self.frompos.push(pos!(-1, -1));
-            self.distance.push(isize::MAX);
-        }
+        self.frompos = vec![pos!(-1, -1); self.map.len()];
+        self.distance = vec![isize::MAX; self.map.len()];
+        self.openlist.clear();
 
         self.point_add(end, begin, 0, end);
         while let Some(pinfo) = self.openlist.pop() {
@@ -298,8 +293,6 @@ impl<'a> AStarJPS<'a> {
             #[cfg(feature = "debug")]
             console_log(self.debug().as_str());
         }
-
-        //console_log(self.debug().as_str());
 
         if self.distance[self.index(begin)] != isize::MAX {
             let mut find = begin;
@@ -444,13 +437,18 @@ pub fn a_star_jps(
 
     let mut pathfinder = AStarJPS::new(pos!(map_x, map_y), map);
     let path = pathfinder.find(pos!(begin_x, begin_y), pos!(end_x, end_y));
-    let smoothpath = pathfinder.simplify(&path);
 
     #[cfg(feature = "debug")]
     {
         console_log(pathfinder.debug().as_str());
         console_log(pathfinder.debug_path(&path).as_str());
         console_log(format!("{:?}\n", path).as_str());
+    }
+
+    let smoothpath = pathfinder.simplify(&path);
+
+    #[cfg(feature = "debug")]
+    {
         console_log(pathfinder.debug_path(&smoothpath).as_str());
         console_log(format!("{:?}\n", smoothpath).as_str());
     }
