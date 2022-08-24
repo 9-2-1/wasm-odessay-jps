@@ -319,7 +319,7 @@ impl<'a> AStarJPS<'a> {
             let mut cdir = 0;
             while end != find {
                 let dir = self.direction[self.index(find)];
-                if dir != 0 {
+                if dir != 0 && dir != cdir {
                     cdir = dir;
                     path.push(find);
                 }
