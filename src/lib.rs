@@ -199,7 +199,7 @@ impl<'a> AStarJPS<'a> {
     fn rushmove(&mut self, pinfo: &Pointinfo, dir: Pos, end: Pos) -> bool {
         let Pointinfo {
             position: mut pos,
-            dist_gh: mut _dist_gh, // do not use
+            dist_gh: _dist_gh, // do not use
             distance: mut dist,
         } = pinfo;
         pos = pos + dir;
@@ -228,7 +228,7 @@ impl<'a> AStarJPS<'a> {
     fn diagmove(&mut self, pinfo: &Pointinfo, dir: Pos, end: Pos) -> bool {
         let Pointinfo {
             position: mut pos,
-            dist_gh: mut _dist_gh, // do not use
+            dist_gh: _dist_gh, // do not use
             distance: mut dist,
         } = pinfo;
         pos = pos + dir;
@@ -244,7 +244,7 @@ impl<'a> AStarJPS<'a> {
             let turning = self.rushmove(
                 &Pointinfo {
                     position: pos,
-                    dist_gh: _dist_gh, // fake
+                    dist_gh: 0, // fake
                     distance: dist,
                 },
                 dir.xonly(),
@@ -252,7 +252,7 @@ impl<'a> AStarJPS<'a> {
             ) || self.rushmove(
                 &Pointinfo {
                     position: pos,
-                    dist_gh: _dist_gh, // fake
+                    dist_gh: 0, // fake
                     distance: dist,
                 },
                 dir.yonly(),
