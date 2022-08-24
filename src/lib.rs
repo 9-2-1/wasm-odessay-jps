@@ -336,7 +336,51 @@ impl<'a> AStarJPS<'a> {
 
     fn simplify(&self, path: &Vec<Pos>) -> Vec<Pos> {
         let mut simpath = Vec::new();
-        simpath.push(pos!(0, 0));
+        let mut dir = pos!(0, 0);
+        let mut i_begin = 0;
+        if !path.is_empty() {
+            let mut i = 0_usize;
+            while i < path.len() - 1 {
+                let diff = path[i + 1] - path[i];
+                let mut stop = false;
+                if diff.x != 0 {
+                    if dir.x == 0 {
+                        dir.x = diff.x;
+                    } else if dir.x * diff.x < 0 {
+                        // 判断符号不同
+                        stop = true;
+                    }
+                }
+                if diff.y != 0 {
+                    if dir.y == 0 {
+                        dir.y = diff.y;
+                    } else if dir.y * diff.y < 0 {
+                        // 判断符号不同
+                        stop = true;
+                    }
+                }
+                if stop {
+                    if i == i_begin + 1 {
+                        i_begin = i;
+                        dir = pos!(0, 0);
+                    } else {
+                        if i_begin != i {
+                            simpath.push(pos!(0, 0));
+                            simpath.push(path[i_begin]);
+                            simpath.push(path[i]);
+                        }
+                        i -= 1;
+                        i_begin = i;
+                        dir = pos!(0, 0);
+                    }
+                } else {
+                    i += 1;
+                }
+            }
+            simpath.push(pos!(0, 0));
+            simpath.push(path[i_begin]);
+            simpath.push(path[path.len() - 1]);
+        }
         return simpath;
     }
 
