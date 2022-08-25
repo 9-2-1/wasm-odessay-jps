@@ -209,9 +209,6 @@ impl<'a> AStarJPS<'a> {
                 return false;
             }
             let index = self.index(pos);
-            if self.distance[index] == -1 {
-                return false;
-            }
             if pos == end
                 || (!self.can_walk(pos - dir.flipxy()) && self.can_walk(pos - dir.flipxy() + dir))
                 || (!self.can_walk(pos + dir.flipxy()) && self.can_walk(pos + dir.flipxy() + dir))
@@ -219,7 +216,6 @@ impl<'a> AStarJPS<'a> {
                 self.point_add(pos, end, dist, pinfo.position);
                 return true;
             }
-            self.distance[index] = -1;
             pos = pos + dir;
             dist += 2;
         }
@@ -238,9 +234,6 @@ impl<'a> AStarJPS<'a> {
                 return false;
             }
             let index = self.index(pos);
-            if self.distance[index] == -1 {
-                return false;
-            }
             if pos == end
                 || (!self.can_walk(pos - dir.xonly())
                     && self.can_walk(pos - dir.xonly() + dir.yonly()))
@@ -271,7 +264,6 @@ impl<'a> AStarJPS<'a> {
                 self.point_add(pos, end, dist, pinfo.position);
                 return true;
             }
-            self.distance[index] = -1;
             pos = pos + dir;
             dist += 3;
         }
