@@ -74,6 +74,16 @@ macro_rules! pos {
     };
 }
 
+fn sign_isize(x: isize) -> isize {
+    return if x > 0 {
+        1
+    } else if x == 0 {
+        0
+    } else {
+        -1
+    };
+}
+
 impl Pos {
     fn xonly(&self) -> Self {
         pos!(self.x, 0)
@@ -83,6 +93,9 @@ impl Pos {
     }
     fn flipxy(&self) -> Self {
         pos!(self.y, self.x)
+    }
+    fn signxy(&self) -> Self {
+        pos!(sign_isize(self.x), sign_isize(self.y))
     }
 }
 
@@ -196,24 +209,30 @@ impl<'a> AStarJPS<'a> {
         }
     }
 
-    fn rushmove(&mut self, pinfo: &Pointinfo, dir: Pos, end: Pos) -> bool {
-        let Pointinfo {
-            position: mut pos,
-            dist_gh: _dist_gh, // do not use
-            distance: mut dist,
-        } = pinfo;
-        pos = pos + dir;
-        dist += 2;
+    fn rushmove(&mut self, from: Pos, dist: isize, dir: Pos, end: Pos) -> bool {
+        return self.rushmove_core(from, dist, dir, end, false);
+    }
+
+    fn rushmove_test(&mut self, from: Pos, dist: isize, dir: Pos, end: Pos) -> bool {
+        return self.rushmove_core(from, dist, dir, end, true);
+    }
+
+    fn rushmove_core(&mut self, from: Pos, dist: isize, dir: Pos, end: Pos, testing: bool) -> bool {
+        let mut pos = from + dir;
+        let mut dist = dist + 2;
         loop {
             if !self.can_walk(pos) {
                 return false;
             }
             let index = self.index(pos);
             if pos == end
+                || self.distance[index] != isize::MAX
                 || (!self.can_walk(pos - dir.flipxy()) && self.can_walk(pos - dir.flipxy() + dir))
                 || (!self.can_walk(pos + dir.flipxy()) && self.can_walk(pos + dir.flipxy() + dir))
             {
-                self.point_add(pos, end, dist, pinfo.position);
+                if !testing {
+                    self.point_add(pos, end, dist, from);
+                }
                 return true;
             }
             pos = pos + dir;
@@ -221,47 +240,28 @@ impl<'a> AStarJPS<'a> {
         }
     }
 
-    fn diagmove(&mut self, pinfo: &Pointinfo, dir: Pos, end: Pos) -> bool {
-        let Pointinfo {
-            position: mut pos,
-            dist_gh: _dist_gh, // do not use
-            distance: mut dist,
-        } = pinfo;
-        pos = pos + dir;
-        dist += 3;
+    fn diagmove(&mut self, from: Pos, dist: isize, dir: Pos, end: Pos) -> bool {
+        let mut pos = from + dir;
+        let mut dist = dist + 3;
         loop {
             if !self.can_walk(pos) {
                 return false;
             }
             let index = self.index(pos);
             if pos == end
+                || self.distance[index] != isize::MAX
                 || (!self.can_walk(pos - dir.xonly())
                     && self.can_walk(pos - dir.xonly() + dir.yonly()))
                 || (!self.can_walk(pos - dir.yonly())
                     && self.can_walk(pos - dir.yonly() + dir.xonly()))
             {
-                self.point_add(pos, end, dist, pinfo.position);
+                self.point_add(pos, end, dist, from);
                 return true;
             }
-            let turning = self.rushmove(
-                &Pointinfo {
-                    position: pos,
-                    dist_gh: 0, // fake
-                    distance: dist,
-                },
-                dir.xonly(),
-                end,
-            ) || self.rushmove(
-                &Pointinfo {
-                    position: pos,
-                    dist_gh: 0, // fake
-                    distance: dist,
-                },
-                dir.yonly(),
-                end,
-            );
+            let turning = self.rushmove_test(pos, dist, dir.xonly(), end)
+                || self.rushmove_test(pos, dist, dir.yonly(), end);
             if turning == true {
-                self.point_add(pos, end, dist, pinfo.position);
+                self.point_add(pos, end, dist, from);
                 return true;
             }
             pos = pos + dir;
@@ -281,17 +281,48 @@ impl<'a> AStarJPS<'a> {
             #[cfg(feature = "debug")]
             console_log(format!("{:?} <- {:?} ", pinfo, self.openlist).as_str());
 
-            if pinfo.distance == self.distance[self.index(pinfo.position)] {
-                if pinfo.position == begin {
+            let pos = pinfo.position;
+            let dist = pinfo.distance;
+
+            if dist == self.distance[self.index(pos)] {
+                if pos == begin {
                     break;
                 }
-                const RUSHDIR: [Pos; 4] = [pos!(1, 0), pos!(-1, 0), pos!(0, 1), pos!(0, -1)];
-                const DIAGDIR: [Pos; 4] = [pos!(1, 1), pos!(-1, 1), pos!(-1, -1), pos!(1, -1)];
-                for dir in RUSHDIR {
-                    self.rushmove(&pinfo, dir, begin);
-                }
-                for dir in DIAGDIR {
-                    self.diagmove(&pinfo, dir, begin);
+                let index = self.index(pos);
+                let mut dir = (pos - self.frompos[index]).signxy();
+                if dir == pos!(0, 0) {
+                    const RUSHDIR: [Pos; 4] = [pos!(1, 0), pos!(-1, 0), pos!(0, 1), pos!(0, -1)];
+                    const DIAGDIR: [Pos; 4] = [pos!(1, 1), pos!(-1, 1), pos!(-1, -1), pos!(1, -1)];
+                    for dir in RUSHDIR {
+                        self.rushmove(pos, dist, dir, begin);
+                    }
+                    for dir in DIAGDIR {
+                        self.diagmove(pos, dist, dir, begin);
+                    }
+                } else if dir.x == 0 || dir.y == 0 {
+                    self.rushmove(pos, dist, dir, begin);
+                    if !self.can_walk(pos - dir.flipxy()) && self.can_walk(pos - dir.flipxy() + dir)
+                    {
+                        self.diagmove(pos, dist, dir - dir.flipxy(), begin);
+                    }
+                    if !self.can_walk(pos + dir.flipxy()) && self.can_walk(pos + dir.flipxy() + dir)
+                    {
+                        self.diagmove(pos, dist, dir + dir.flipxy(), begin);
+                    }
+                } else {
+                    self.rushmove(pos, dist, dir.xonly(), begin);
+                    self.rushmove(pos, dist, dir.yonly(), begin);
+                    self.diagmove(pos, dist, dir, begin);
+                    if !self.can_walk(pos - dir.xonly())
+                        && self.can_walk(pos - dir.xonly() + dir.yonly())
+                    {
+                        self.diagmove(pos, dist, dir.yonly() - dir.xonly(), begin);
+                    }
+                    if !self.can_walk(pos - dir.yonly())
+                        && self.can_walk(pos - dir.yonly() + dir.xonly())
+                    {
+                        self.diagmove(pos, dist, dir.xonly() - dir.yonly(), begin);
+                    }
                 }
             }
 
@@ -363,7 +394,6 @@ impl<'a> AStarJPS<'a> {
                 }
 
                 if stop {
-
                     #[cfg(feature = "debug")]
                     console_log(format!("Range: {} - {}", i_begin, i).as_str());
 
@@ -372,25 +402,10 @@ impl<'a> AStarJPS<'a> {
 
                         let begin = path[i_begin];
                         let end = path[i];
-                        let mut dir = begin - end; // 就是反过来的
+                        let mut dir = (begin - end).signxy(); // 就是反过来的
                         if dir.x == 0 || dir.y == 0 {
                             simpath.push(begin);
                         } else {
-                            dir.x = if dir.x > 0 {
-                                1
-                            } else if dir.x == 0 {
-                                0
-                            } else {
-                                -1
-                            };
-                            dir.y = if dir.y > 0 {
-                                1
-                            } else if dir.y == 0 {
-                                0
-                            } else {
-                                -1
-                            };
-
                             self.frompos = vec![pos!(-1, -1); self.map.len()];
                             self.distance = vec![isize::MAX; self.map.len()];
                             self.openlist.clear();
@@ -522,21 +537,7 @@ impl<'a> AStarJPS<'a> {
                     if self.frompos[i] == pos!(-1, -1) {
                         "::"
                     } else {
-                        let mut cdir = here - self.frompos[i];
-                        cdir.x = if cdir.x > 0 {
-                            1
-                        } else if cdir.x == 0 {
-                            0
-                        } else {
-                            -1
-                        };
-                        cdir.y = if cdir.y > 0 {
-                            1
-                        } else if cdir.y == 0 {
-                            0
-                        } else {
-                            -1
-                        };
+                        let mut cdir = (here - self.frompos[i]).signxy();
                         DIRSYN[((cdir.y + 1) * 3 + (cdir.x + 2)) as usize]
                     }
                 } else {
