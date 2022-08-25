@@ -409,6 +409,7 @@ impl<'a> AStarJPS<'a> {
                                         && (!self.can_walk(cpos + dir.xonly())
                                             || !self.can_walk(cpos + dir.yonly()))
                                     {
+                                        // 判断拐点
                                         pointlist.push(cpos);
                                     }
                                     cpos.x += dir.x;
@@ -449,12 +450,35 @@ impl<'a> AStarJPS<'a> {
                                                 * 100.0)
                                                 as isize;
                                             self.point_add_simp(pos, begin, dist + dist2, cpos);
-                                            self.point_add_simp(
-                                                pos + dir,
-                                                begin,
-                                                dist + dist2 + 141, /* (2.0).sqrt()*100.0 */
-                                                pos,
-                                            );
+                                        } else {
+                                            let diff2 = pos - cpos;
+                                            // 看拐过拐点之后能不能到
+                                            let cpos2 = cpos + dir;
+                                            let dist2 = dist + 141; // (2.0).sqrt()*100.0
+                                            let points = line_points(cpos2, pos);
+                                            let mut can_go = true;
+                                            points.iter().for_each(|point| {
+                                                if !self.can_walk(*point) {
+                                                    can_go = false;
+                                                }
+                                            });
+                                            if can_go {
+                                                let dist3 = (((diff2.x * diff2.x
+                                                    + diff2.y * diff2.y)
+                                                    as f64)
+                                                    .sqrt()
+                                                    * 100.0)
+                                                    as isize;
+                                                // 中间节点，不需要被考虑
+                                                let index2 = self.index(cpos2);
+                                                self.frompos[index2] = cpos;
+                                                self.point_add_simp(
+                                                    pos,
+                                                    begin,
+                                                    dist2 + dist3, /* (2.0).sqrt()*100.0 */
+                                                    cpos2,
+                                                );
+                                            }
                                         }
                                     }
                                 });
