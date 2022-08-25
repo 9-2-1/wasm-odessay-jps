@@ -185,6 +185,16 @@ impl<'a> AStarJPS<'a> {
             && self.map[self.index(point)] == 0;
     }
 
+    fn check_line(&self, begin: Pos, end: Pos) -> bool {
+        let points = line_points(begin, end);
+        for point in points.into_iter() {
+            if !self.can_walk(point) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     fn point_add(&mut self, point: Pos, end: Pos, dist: isize, from: Pos) {
         return self.point_add_hval(point, dist, from, Self::hfunc(point, end));
     }
@@ -353,10 +363,10 @@ impl<'a> AStarJPS<'a> {
 
     fn simplify(&mut self, path: &Vec<Pos>) -> Vec<Pos> {
         let mut simpath = Vec::new();
-        let mut dir = pos!(0, 0);
-        let mut begin = path[0];
-        let mut shorten = false;
         if !path.is_empty() {
+            let mut dir = pos!(0, 0);
+            let mut begin = path[0];
+            let mut shorten = false;
             let mut i = 0_usize;
             loop {
                 let mut stop = false;
@@ -437,13 +447,7 @@ impl<'a> AStarJPS<'a> {
                                         let pos = *pos;
                                         let diff = pos - cpos;
                                         if diff.x * dir.x >= 0 && diff.y * dir.y >= 0 {
-                                            let points = line_points(cpos, pos);
-                                            let mut can_go = true;
-                                            points.iter().for_each(|point| {
-                                                if !self.can_walk(*point) {
-                                                    can_go = false;
-                                                }
-                                            });
+                                            let can_go = self.check_line(cpos, pos);
                                             if can_go {
                                                 let dist2 = (((diff.x * diff.x + diff.y * diff.y)
                                                     as f64)
@@ -456,13 +460,7 @@ impl<'a> AStarJPS<'a> {
                                                 // 看拐过拐点之后能不能到
                                                 let cpos2 = cpos + dir;
                                                 let dist2 = dist + 141; // (2.0).sqrt()*100.0
-                                                let points = line_points(cpos2, pos);
-                                                let mut can_go = true;
-                                                points.iter().for_each(|point| {
-                                                    if !self.can_walk(*point) {
-                                                        can_go = false;
-                                                    }
-                                                });
+                                                let can_go = self.check_line(cpos2, pos);
                                                 if can_go {
                                                     let dist3 = (((diff2.x * diff2.x
                                                         + diff2.y * diff2.y)
