@@ -500,9 +500,9 @@ impl<'a> AStarJPS<'a> {
                 }
                 i += 1;
             }
+            simpath.push(path[path.len() - 1]);
         }
 
-        simpath.push(path[path.len() - 1]);
         return simpath;
     }
 
