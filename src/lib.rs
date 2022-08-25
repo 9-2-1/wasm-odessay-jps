@@ -123,11 +123,7 @@ struct AStarJPS<'a> {
 }
 
 fn roundidiv(a: isize, b: isize) -> isize {
-    return if a > 0 {
-        (2 * a + b) / (2 * b) // round(a/b) = floor(a/b+1/2) = (2*a+b)/(2*b)
-    } else {
-        (2 * a - b + 1) / (2 * b) // round(a/b) = ceil'(a/b-1/2) = (2*a-b+1)/(2*b)
-    };
+    return (((a as f64) / (b as f64)).round() as isize);
 }
 
 fn line_points(a: Pos, b: Pos) -> Vec<Pos> {
