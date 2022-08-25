@@ -344,18 +344,6 @@ impl<'a> AStarJPS<'a> {
 
                 find = next;
                 cdir = dir;
-
-                if !self.can_walk(find) {
-                    // 出问题了！
-
-                    #[cfg(feature = "debug")]
-                    {
-                        console_log(format!("{:?}", self).as_str());
-                        console_log(format!("{:?}", find).as_str());
-                    }
-
-                    break;
-                }
             }
             path.push(find);
         }
@@ -490,18 +478,6 @@ impl<'a> AStarJPS<'a> {
 
                                     find = next;
                                     cdir = dir;
-
-                                    if !self.can_walk(find) {
-                                        // 出问题了！
-
-                                        #[cfg(feature = "debug")]
-                                        {
-                                            console_log(format!("{:?}", self).as_str());
-                                            console_log(format!("{:?}", find).as_str());
-                                        }
-
-                                        break;
-                                    }
                                 }
                             }
                         }
