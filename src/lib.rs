@@ -122,8 +122,16 @@ struct AStarJPS<'a> {
     openlist: BinaryHeap<Pointinfo>,
 }
 
+fn ceilidiv(a: isize, b: isize) -> isize {
+    return ((a as f64) / (b as f64) - 1e-8).ceil() as isize;
+}
+
+fn flooridiv(a: isize, b: isize) -> isize {
+    return ((a as f64) / (b as f64) + 1e-8).floor() as isize;
+}
+
 fn roundidiv(a: isize, b: isize) -> isize {
-    return (((a as f64) / (b as f64)).round() as isize);
+    return ((a as f64) / (b as f64)).round() as isize;
 }
 
 fn line_points(a: Pos, b: Pos) -> Vec<Pos> {
@@ -181,13 +189,26 @@ impl<'a> AStarJPS<'a> {
             && self.map[self.index(point)] == 0;
     }
 
-    fn check_line(&self, begin: Pos, end: Pos) -> bool {
-        let points = line_points(begin, end);
-        for point in points.into_iter() {
-            if !self.can_walk(point) {
+    fn check_line(&self, a: Pos, b: Pos) -> bool {
+        let step = cmp::max((a.x - b.x).abs(), (a.y - b.y).abs());
+        for i in 1..step {
+            if !self.can_walk(pos!(
+                a.x + flooridiv((b.x - a.x) * i, step),
+                a.y + flooridiv((b.y - a.y) * i, step)
+            )) {
+                return false;
+            }
+            if !self.can_walk(pos!(
+                a.x + ceilidiv((b.x - a.x) * i, step),
+                a.y + ceilidiv((b.y - a.y) * i, step)
+            )) {
                 return false;
             }
         }
+
+        //#[cfg(feature = "debug")]
+        //console_log(format!("{:?} {:?} {:?}", a, b, resu).as_str());
+
         return true;
     }
 
@@ -418,6 +439,7 @@ impl<'a> AStarJPS<'a> {
                                         {
                                             // 判断拐点
                                             pointlist.push(cpos);
+                                            pointlist.push(cpos + dir);
                                         }
                                         cpos.x += dir.x;
                                     }
@@ -451,29 +473,6 @@ impl<'a> AStarJPS<'a> {
                                                     * 100.0)
                                                     as isize;
                                                 self.point_add_simp(pos, begin, dist + dist2, cpos);
-                                            } else {
-                                                let diff2 = pos - cpos;
-                                                // 看拐过拐点之后能不能到
-                                                let cpos2 = cpos + dir;
-                                                let dist2 = dist + 141; // (2.0).sqrt()*100.0
-                                                let can_go = self.check_line(cpos2, pos);
-                                                if can_go {
-                                                    let dist3 = (((diff2.x * diff2.x
-                                                        + diff2.y * diff2.y)
-                                                        as f64)
-                                                        .sqrt()
-                                                        * 100.0)
-                                                        as isize;
-                                                    // 中间节点，不需要被考虑
-                                                    let index2 = self.index(cpos2);
-                                                    self.frompos[index2] = cpos;
-                                                    self.point_add_simp(
-                                                        pos,
-                                                        begin,
-                                                        dist2 + dist3, /* (2.0).sqrt()*100.0 */
-                                                        cpos2,
-                                                    );
-                                                }
                                             }
                                         }
                                     });
