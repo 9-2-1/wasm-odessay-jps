@@ -1,7 +1,10 @@
 准备工作
 
 ``` batchfile
+rem 必要的
 cargo install wasm-pack
+rem 为了减小体积，用了nightly的一些功能
+rustup default nightly
 rem 如果要浏览器演示，建议
 npm install -g five-server
 rem 或者
