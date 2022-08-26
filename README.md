@@ -1,3 +1,7 @@
+在线演示
+
+<https://six-6.gitee.io/wasm-odessay-jps/example.html>
+
 准备工作
 
 ``` batchfile
